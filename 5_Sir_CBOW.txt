@@ -1,0 +1,189 @@
+# ==================================================================================================
+# TEXT PROCESSING + WORDCLOUD + VOCAB PREPARATION (WITH DETAILED COMMENTS)
+# ==================================================================================================
+
+# Import all required libraries
+import re
+import numpy as np
+import string
+import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+##%matplotlib inline  # Ensures plots appear inline in Jupyter Notebook
+
+from subprocess import check_output
+from wordcloud import WordCloud, STOPWORDS
+
+# ==================================================================================================
+# STEP 1: CREATE INITIAL TEXT AND GENERATE WORD CLOUD
+# ==================================================================================================
+
+# Initialize stopwords set from WordCloud's built-in STOPWORDS list
+# STOPWORDS: common English words like 'the', 'and', 'is', etc., automatically filtered in WordCloud
+stopwords = set(STOPWORDS)
+
+# Multiline paragraph (sample text used for both word cloud and CBOW processing)
+sentences = """We are about to study the idea of a computational process.
+Computational processes are abstract beings that inhabit computers.
+As they evolve, processes manipulate other abstract things called data.
+The evolution of a process is directed by a pattern of rules
+called a program. People create programs to direct processes. In effect,
+we conjure the spirits of the computer with our spells."""
+
+# Generate the word cloud
+# Parameters:
+# - background_color='white': sets background to white
+# - stopwords=stopwords: removes common stopwords from visualization
+# - max_words=200: display up to 200 most frequent words
+# - max_font_size=40: controls maximum font size
+# - random_state=42: ensures consistent randomization for repeatability
+wordcloud = WordCloud(
+    background_color='white',
+    stopwords=stopwords,
+    max_words=200,
+    max_font_size=40,
+    random_state=42
+).generate(sentences)
+
+# Display the word cloud image
+fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 10))
+axes.imshow(wordcloud)          # Renders the word cloud
+axes.axis('off')                # Hides axes for cleaner look
+fig.tight_layout()              # Adjust layout to avoid clipping
+plt.show()
+
+# ==================================================================================================
+# STEP 2: CLEAN AND PREPROCESS TEXT
+# ==================================================================================================
+
+# Define the same text again for preprocessing and vocabulary generation
+sentences = """We are about to study the idea of a computational process.
+Computational processes are abstract beings that inhabit computers.
+As they evolve, processes manipulate other abstract things called data.
+The evolution of a process is directed by a pattern of rules
+called a program. People create programs to direct processes. In effect,
+we conjure the spirits of the computer with our spells."""
+
+# ----------------------------------------------------------------------------------
+# Remove special characters (punctuation, newlines, symbols)
+# ----------------------------------------------------------------------------------
+# This regex replaces all characters except alphabets (A-Z, a-z) and digits (0-9) with a space.
+sentences = re.sub('[^A-Za-z0-9]+', ' ', sentences)
+
+# ----------------------------------------------------------------------------------
+# Remove 1-letter words (like 'a', 'I') that are often uninformative
+# ----------------------------------------------------------------------------------
+# Regex explanation:
+# (?:^| )\w(?:$| ) → single word character (\w) surrounded by spaces or start/end of line
+sentences = re.sub(r'(?:^| )\w(?:$| )', ' ', sentences).strip()
+
+# ----------------------------------------------------------------------------------
+# Convert entire text to lowercase for normalization
+# ----------------------------------------------------------------------------------
+# Lowercasing avoids duplicates like 'The' vs 'the'
+sentences = sentences.lower()
+print("After lowercasing and cleaning:\n", sentences)
+print()
+
+# ==================================================================================================
+# STEP 3: REMOVE STOP WORDS (ADDED SECTION)
+# ==================================================================================================
+# Why remove stopwords?
+# Stopwords are very common words like "is", "the", "and", "of" that carry little meaning.
+# Removing them helps focus on content-bearing words in small text samples like this.
+
+import nltk
+nltk.download('stopwords', quiet=True)
+from nltk.corpus import stopwords
+
+stop_words = set(stopwords.words('english'))
+
+# Split the cleaned sentence into tokens (words)
+tokens = sentences.split()
+
+# Filter out stopwords
+tokens_no_stop = [word for word in tokens if word not in stop_words]
+
+# Join tokens back into cleaned string (optional, for readability)
+sentences = ' '.join(tokens_no_stop)
+
+print("After removing stopwords:\n", sentences)
+print()
+
+# ==================================================================================================
+# STEP 4: TOKENIZATION AND VOCABULARY CREATION
+# ==================================================================================================
+
+# Split text into individual tokens (word list)
+words = sentences.split()
+print("Tokenized words:\n", words)
+print()
+
+# Create a vocabulary (unique words only)
+vocab = set(words)
+print("Vocabulary (unique words):\n", vocab)
+print()
+
+# Vocabulary size (number of unique words)
+vocab_size = len(vocab)
+print("Vocabulary size:", vocab_size)
+print()
+
+# Embedding dimension (each word represented as a 10-length vector)
+embed_dim = 10
+
+# Context window size (number of neighboring words to consider for each target)
+context_size = 2
+
+# Create word-to-index and index-to-word mappings
+# These mappings help convert between tokens and numerical indices (for embedding lookup)
+word_to_ix = {word: i for i, word in enumerate(vocab)}
+ix_to_word = {i: word for i, word in enumerate(vocab)}
+
+print("Word to Index Mapping:\n", word_to_ix)
+print()
+print("Index to Word Mapping:\n", ix_to_word)
+print()
+
+# ==================================================================================================
+# STEP 5: BUILD (CONTEXT, TARGET) PAIRS FOR CBOW TRAINING
+# ==================================================================================================
+# CBOW (Continuous Bag of Words) predicts the target (center) word using context (neighboring words).
+# We extract context windows of size 2 on both sides of each target word.
+
+data = []
+for i in range(2, len(words) - 2):
+    # context = two words before and two after the target
+    context = [words[i - 2], words[i - 1], words[i + 1], words[i + 2]]
+    # target = the middle word (to be predicted)
+    target = words[i]
+    data.append((context, target))
+
+# Display the first few context-target pairs
+print("Sample (context, target) pairs:")
+print(data[:5])
+print()
+
+# ==================================================================================================
+# STEP 6: INITIALIZE RANDOM EMBEDDINGS
+# ==================================================================================================
+# Each word gets a random initial embedding vector of length 'embed_dim'
+# Shape = (vocab_size, embed_dim)
+
+embeddings = np.random.random_sample((vocab_size, embed_dim))
+
+print("Embedding matrix shape:", embeddings.shape)
+print("Sample embedding vector (first row):")
+print(embeddings[0])
+print()
+
+# ==================================================================================================
+# END OF CODE
+# ==================================================================================================
+
+# At this point, you have:
+# - Word cloud visualization
+# - Preprocessed tokens (cleaned + stopwords removed)
+# - Vocabulary mapping (word_to_ix)
+# - Context-target dataset for CBOW-style learning
+# - Randomly initialized embeddings ready for model training

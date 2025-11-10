@@ -1,0 +1,202 @@
+"""
+================================================================================
+TRANSFER LEARNING WITH VGG16 FOR FLOWER CLASSIFICATION
+================================================================================
+
+ENTIRE WORKING OF THE PROJECT (COMMENTED SECTION):
+
+1. OBJECTIVE:
+   - Classify flower images into 5 categories using Transfer Learning
+   - Leverage pre-trained VGG16 model trained on ImageNet dataset
+   - Use only the convolutional base and add custom dense layers on top
+
+2. DATASET:
+   - Source: TensorFlow Flowers dataset (tf_flowers)
+   - Total flowers: ~3,600 images of flowers in 5 categories
+   - Split: 70% training (2,520 images), 30% testing (1,080 images)
+   - Categories: Daisy, Dandelion, Rose, Sunflower, Tulip
+
+3. PREPROCESSING:
+   - Load images with labels from tf_flowers dataset
+   - Resize all images to 150x150 pixels for VGG16 input
+   - Convert labels to one-hot encoding (categorical format)
+   - Normalize images using VGG16's preprocess_input function
+
+4. TRANSFER LEARNING APPROACH:
+   - Load pre-trained VGG16 model (trained on ImageNet weights)
+   - Freeze all convolutional layers (base_model.trainable = False)
+   - Replace top classification layer with custom dense layers:
+     * Flatten layer: Convert feature maps to 1D vector
+     * Dense layer 1: 50 neurons with ReLU activation (learns patterns)
+     * Dense layer 2: 20 neurons with ReLU activation (reduces dimensionality)
+     * Output layer: 5 neurons with softmax activation (probability for each class)
+
+5. MODEL ARCHITECTURE:
+   Input (150, 150, 3) 
+   → VGG16 Convolutional Base (frozen weights from ImageNet)
+   → Flatten layer
+   → Dense(50, relu)
+   → Dense(20, relu)
+   → Dense(5, softmax)
+   → Output (5 classes)
+
+6. TRAINING:
+   - Optimizer: Adam (adaptive learning rate)
+   - Loss function: Categorical Crossentropy (multi-class classification)
+   - Metrics: Accuracy (percentage of correct predictions)
+   - Epochs: 10 iterations over full training dataset
+   - Batch size: 32 images per batch
+   - Validation split: 20% of training data used for validation
+
+7. EVALUATION:
+   - Calculate loss and accuracy on test set
+   - Plot training accuracy vs epochs to visualize learning
+
+8. WHY TRANSFER LEARNING:
+   - VGG16 already learned generic features (edges, textures) from 1.2M ImageNet images
+   - Freezing base layers prevents overwriting useful learned representations
+   - Only train top layers specific to flower classification task
+   - Requires less data and training time compared to training from scratch
+   - Achieves better accuracy with limited computational resources
+
+================================================================================
+"""
+
+# CELL 1: Import required libraries
+import tensorflow_datasets as tfds  # Library to download and load TensorFlow datasets
+import tensorflow as tf  # Core TensorFlow framework for deep learning
+from tensorflow.keras.utils import to_categorical  # Function to convert labels to one-hot encoding
+
+# CELL 2: Load flower dataset from TensorFlow Datasets
+## Loading images and labels from tf_flowers dataset
+(train_ds, train_labels), (test_ds, test_labels) = tfds.load("tf_flowers",  # Load TensorFlow flowers dataset
+    split=["train[:70%]", "train[:30%]"],  # Split data: 70% training, 30% testing
+    batch_size=-1,  # Load all data at once (batch_size -1 means no batching during load)
+    as_supervised=True,  # Return tuples of (image, label) instead of just images
+)
+
+# CELL 3: Check the shape/dimensions of images before resizing
+## check existing image size - print the shape of first training image
+train_ds[0].shape  # Display dimensions of first image (height, width, channels)
+
+# CELL 4: Resize all images to fixed dimensions for VGG16
+## Resizing images to 150x150 pixels (VGG16 standard input size)
+train_ds = tf.image.resize(train_ds, (150, 150))  # Resize all training images to 150x150 pixels
+test_ds = tf.image.resize(test_ds, (150, 150))  # Resize all test images to 150x150 pixels
+train_ds[0].shape  # Verify the resized dimensions (should be 150, 150, 3)
+
+# CELL 5: Convert labels to one-hot encoded format
+## Transforming labels to correct format (one-hot encoding)
+train_labels = to_categorical(train_labels, num_classes=5)  # Convert training labels to one-hot vectors (5 classes)
+test_labels = to_categorical(test_labels, num_classes=5)  # Convert test labels to one-hot vectors (5 classes)
+
+# CELL 6: Import VGG16 model and preprocessing function
+from tensorflow.keras.applications.vgg16 import VGG16  # Import pre-trained VGG16 model architecture
+from tensorflow.keras.applications.vgg16 import preprocess_input  # Import VGG16-specific preprocessing function
+
+# CELL 7: Load pre-trained VGG16 model without top classification layer
+## Loading VGG16 model with ImageNet weights, excluding the top classification layers
+base_model = VGG16(weights="imagenet",  # Use weights pre-trained on ImageNet dataset
+                    include_top=False,  # Exclude the top fully-connected layers (we'll add our own)
+                    input_shape=train_ds[0].shape)  # Set input shape to match our resized images (150, 150, 3)
+
+# CELL 8: Freeze all layers in the base model to prevent updating their weights
+## We will not train base model i.e. Freeze Parameters in model's lower convolutional layers
+base_model.trainable = False  # Set trainable=False to freeze all VGG16 weights (don't update during training)
+
+# CELL 9: Apply VGG16-specific preprocessing to normalize pixel values
+## Preprocessing input - normalize images according to ImageNet normalization
+train_ds = preprocess_input(train_ds)  # Normalize training images (convert RGB to BGR, subtract mean values)
+test_ds = preprocess_input(test_ds)  # Normalize test images using VGG16 preprocessing
+
+# CELL 10: Display the architecture and parameters of the base VGG16 model
+## model details - print summary of VGG16 architecture
+base_model.summary()  # Print model architecture including layer types, output shapes, and parameter counts
+
+# CELL 11: Build custom model by adding layers on top of the frozen VGG16 base
+#add our layers on top of this model
+from tensorflow.keras import layers, models  # Import Keras layers and model classes
+
+flatten_layer = layers.Flatten()  # Create a Flatten layer to convert 3D feature maps to 1D vector
+dense_layer_1 = layers.Dense(50, activation='relu')  # Create dense layer with 50 neurons and ReLU activation
+dense_layer_2 = layers.Dense(20, activation='relu')  # Create dense layer with 20 neurons and ReLU activation
+prediction_layer = layers.Dense(5, activation='softmax')  # Create output layer with 5 neurons (one per class) and softmax
+
+
+model = models.Sequential([  # Create sequential model (layers stacked linearly)
+    base_model,  # Add frozen VGG16 convolutional base
+    flatten_layer,  # Flatten 3D output to 1D vector
+    dense_layer_1,  # Add first dense layer (50 neurons, ReLU)
+    dense_layer_2,  # Add second dense layer (20 neurons, ReLU)
+    prediction_layer  # Add output layer (5 neurons, softmax for probability distribution)
+])
+
+# CELL 12: Compile the model with optimizer, loss function, and metrics
+model.compile(  # Configure the model for training
+    optimizer='adam',  # Use Adam optimizer (adaptive learning rate optimization algorithm)
+    loss='categorical_crossentropy',  # Use categorical crossentropy loss (for multi-class classification)
+    metrics=['accuracy'],  # Track accuracy metric during training
+)
+
+# CELL 13: Train the model on training data with validation
+history=model.fit(train_ds,  # Training images
+                  train_labels,  # Training labels (one-hot encoded)
+                  epochs=10,  # Train for 10 complete passes through the dataset
+                  validation_split=0.2,  # Use 20% of training data for validation (not in weight updates)
+                  batch_size=32)  # Process 32 images per gradient update iteration
+
+# CELL 14: Evaluate the model on test data and print results
+los,accurac=model.evaluate(test_ds,test_labels)  # Calculate loss and accuracy on unseen test set
+print("Loss: ",los,"Accuracy: ", accurac)  # Print loss and accuracy values as decimal (e.g., 0.95 = 95%)
+
+# CELL 15: Plot training accuracy over epochs to visualize learning progress
+import matplotlib.pyplot as plt  # Import matplotlib for plotting graphs
+plt.plot(history.history['accuracy'])  # Plot accuracy values from each epoch
+plt.title('ACCURACY')  # Set plot title
+plt.ylabel('accuracy')  # Label y-axis as accuracy
+plt.xlabel('epoch')  # Label x-axis as epoch number
+plt.legend(['train'],loc='upper left')  # Add legend showing training curve
+plt.show()  # Display the plot
+
+
+---
+
+## KEY CONCEPTS
+
+### Transfer Learning
+- **Source Task**: ImageNet (1000 classes)
+- **Pre-trained Model**: VGG16 (learned on ImageNet)
+- **Target Task**: Flower classification (5 classes)
+- **Strategy**: Use learned features, adapt for new task
+
+### VGG16 Architecture
+- **Input**: 224×224×3 images
+- **5 Convolutional Blocks**: Learn hierarchical features
+- **Output**: 7×7×512 feature maps (25,088 features)
+- **Classification**: Original 1000-class classifier
+
+### Transfer Learning Strategy
+1. Load pre-trained VGG16
+2. Freeze convolutional layers (keep learned features)
+3. Replace classification layers
+4. Train only new layers (fast, needs little data)
+5. Optionally fine-tune some frozen layers
+
+### Why Transfer Learning Works
+- **Layer 1-2**: Edges, colors (universal)
+- **Layer 3-4**: Textures, shapes (somewhat universal)
+- **Layer 5+**: Object-specific features (adaptable)
+- **New layers**: Task-specific classification
+
+### Fine-tuning
+- Train new layers first with frozen conv layers
+- Then unfreeze upper layers
+- Train with very low learning rate
+- Adapt pre-trained features to new task
+
+### When to Use Transfer Learning
+- Small dataset (< 10K images)
+- Similar domain (both are images)
+- Pre-trained model available
+- Limited computation
+- Want fast training

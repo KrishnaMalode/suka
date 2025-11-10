@@ -1,0 +1,638 @@
+# ASSIGNMENT 3: CNN IMAGE CLASSIFICATION WITH MNIST DATASET
+## Complete Code with 4 Stages + Manual Digit Checking Section
+
+```python
+# ============================================================================
+# ASSIGNMENT 3: CNN IMAGE CLASSIFICATION WITH MNIST DATASET - COMPLETE CODE
+# ============================================================================
+# Objective: Build CNN for digit classification on MNIST dataset
+# Dataset: 60,000 training + 10,000 test handwritten digit images
+# Task: Classify digits 0-9 with CNN
+# Structure: 4 Stages as per lab manual
+# ============================================================================
+
+# STAGE A: LOADING AND PREPROCESSING THE IMAGE DATA
+# ============================================================================
+
+print("="*70)
+print("STAGE A: LOADING AND PREPROCESSING THE IMAGE DATA")
+print("="*70)
+
+# ============================================================================
+# STEP 1: IMPORT ALL NECESSARY PACKAGES
+# ============================================================================
+
+"""
+Quick one-line summary (exam ke liye yaad rakhne layak)
+
+NumPy: numeric arrays.
+
+TensorFlow: model building/training.
+
+MNIST: dataset load karna.
+
+Sequential: model structure.
+
+Conv2D/MaxPool/Flatten/Dense/Dropout: CNN layers.
+
+Matplotlib: plots/images.
+
+sklearn metrics: performance report.
+
+Seaborn: pretty visualizations.
+
+Agar chaho toh main ye explanations ek-pag
+
+print("\nSTEP 1: Importing necessary packages...\n")"""
+
+# IMPORT 1: NumPy - Numerical operations
+import numpy as np
+# Used for: Array operations, data manipulation
+
+# IMPORT 2: TensorFlow - Deep learning framework
+import tensorflow as tf
+# Used for: Neural network building and training
+
+# IMPORT 3: MNIST dataset from Keras
+from tensorflow.keras.datasets import mnist
+# Used for: Loading MNIST dataset
+
+# IMPORT 4: Sequential model
+from tensorflow.keras.models import Sequential
+# Used for: Creating feedforward/CNN architecture
+
+# IMPORT 5: Layers for building CNN
+from tensorflow.keras.layers import Dense, Conv2D, MaxPooling2D, Flatten, Dropout
+# Conv2D: Convolutional layer (feature extractio    n)
+# MaxPooling2D: Pooling layer (dimensionality reduction)
+# Dense: Fully connected layer
+# Flatten: Convert 3D to 1D
+# Dropout: Regularization
+
+# IMPORT 6: Matplotlib - Visualization
+import matplotlib.pyplot as plt
+# Used for: Plotting images and results
+
+# IMPORT 7: Other utilities
+from sklearn.metrics import classification_report, confusion_matrix
+# Used for: Performance evaluation
+import seaborn as sns
+# Used for: Heatmap visualization
+
+print("[INFO] All packages imported successfully!")
+
+# ============================================================================
+# STEP 2: LOAD MNIST DATASET
+# ============================================================================
+
+print("\nSTEP 2: Loading MNIST dataset...\n")
+
+# LOAD MNIST DATASET
+# MNIST: Modified National Institute of Standards and Technology
+# 70,000 handwritten digit images (0-9)
+# 28×28 pixels, grayscale
+
+print("[INFO] Accessing MNIST...")
+
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+# x_train: Training images (60000, 28, 28)
+# y_train: Training labels (60000,)
+# x_test: Test images (10000, 28, 28)
+# y_test: Test labels (10000,)
+
+print(f"[INFO] Original training data shape: {x_train.shape}")
+print(f"[INFO] Original test data shape: {x_test.shape}")
+print(f"[INFO] Training labels shape: {y_train.shape}")
+print(f"[INFO] Test labels shape: {y_test.shape}")
+
+# ============================================================================
+# STEP 3: RESHAPE AND NORMALIZE DATA
+# ============================================================================
+
+print("\nSTEP 3: Reshaping and normalizing data...\n")
+
+# RESHAPE FOR CNN
+# CNN expects: (batch_size, height, width, channels)
+# Current: (60000, 28, 28) - missing channel dimension
+# Needed: (60000, 28, 28, 1) - 1 channel for grayscale
+
+# Reshape training data
+x_train = x_train.reshape((x_train.shape[0], 28, 28, 1))
+# Now shape: (60000, 28, 28, 1)
+
+# Reshape test data
+x_test = x_test.reshape((x_test.shape[0], 28, 28, 1))
+# Now shape: (10000, 28, 28, 1)
+
+print(f"[INFO] Reshaped training data: {x_train.shape}")
+print(f"[INFO] Reshaped test data: {x_test.shape}")
+
+# NORMALIZE DATA
+# Pixel values currently: 0-255 (integer)
+# Normalize to: 0-1 (float)
+# Divide by 255.0
+
+x_train = x_train.astype('float32') / 255.0
+x_test = x_test.astype('float32') / 255.0
+
+print(f"[INFO] Normalized pixel range: [{x_train.min()}, {x_train.max()}]")
+print(f"[INFO] Data type: {x_train.dtype}")
+
+# ============================================================================
+# STEP 4: VISUALIZE SAMPLE IMAGES
+# ============================================================================
+
+print("\nSTEP 4: Visualizing sample images...\n")
+
+# Display 10 random training images
+fig, axes = plt.subplots(2, 5, figsize=(12, 5))
+
+for i, ax in enumerate(axes.flatten()):
+    # Select random image
+    idx = np.random.randint(0, len(x_train))
+    
+    # Plot image (remove channel dimension for display)
+    ax.imshow(x_train[idx, :, :, 0], cmap='gray')
+    
+    # Set title with digit label
+    ax.set_title(f"Digit: {y_train[idx]}", fontsize=10)
+    ax.axis('off')
+
+plt.suptitle("Sample MNIST Images", fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+print("[INFO] Sample images displayed!")
+
+# ============================================================================
+# STAGE B: DEFINING THE MODEL'S ARCHITECTURE
+# ============================================================================
+
+print("\n" + "="*70)
+print("STAGE B: DEFINING THE MODEL'S ARCHITECTURE")
+print("="*70)
+
+print("\nSTEP 5: Building CNN model architecture...\n")
+
+# CREATE SEQUENTIAL MODEL
+# Sequential: Layers stacked linearly
+model = Sequential()
+
+    # ============================================================================
+    # CONVOLUTIONAL LAYER 1
+    # ============================================================================
+
+    # Add first Convolutional layer
+    # Conv2D: 2D Convolution operation
+    # 28 filters: Number of feature detectors
+    # kernel_size=(3, 3): 3×3 convolution window
+    # input_shape=(28, 28, 1): Input image dimensions
+    # activation='relu': ReLU activation function
+    #
+    # How it works:
+    # - Slide 3×3 filter across image
+    # - Element-wise multiply with local region
+    # - Sum products → single feature value
+    # - Repeat across entire image
+    # - Learn different patterns with 28 filters
+
+    model.add(Conv2D(28, kernel_size=(3, 3), activation='relu', 
+                    input_shape=(28, 28, 1)))
+
+    # Output shape: (28, 28, 28)
+    # - Spatial: 28×28 (same due to implicit padding)
+    # - Channels: 28 (number of filters)
+
+    print("[INFO] Added Conv2D layer: 28 filters, 3×3 kernel")
+
+    # ============================================================================
+    # MAXPOOLING LAYER 1
+    # ============================================================================
+
+    # Add Max Pooling layer
+    # pool_size=(2, 2): 2×2 pooling window
+    #
+    # How it works:
+    # - Divide feature map into 2×2 regions
+    # - Take maximum value from each region
+    # - Result: Half the spatial dimensions
+    #
+    # Why pooling?
+    # - Reduce computational cost
+    # - Reduce number of parameters
+    # - Extract most important features
+    # - Provide translation invariance
+
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+
+    # Output shape: (14, 14, 28)
+    # - Spatial: 14×14 (halved from 28×28)
+    # - Channels: 28 (unchanged)
+
+    print("[INFO] Added MaxPooling2D layer: 2×2 pool")
+
+# ============================================================================
+# FLATTEN LAYER
+# ============================================================================
+
+# Flatten: Convert 3D feature maps to 1D vector
+# Current shape: (14, 14, 28)
+# After flatten: (5488,)
+# Calculation: 14 × 14 × 28 = 5,488
+#
+# Why flatten?
+# - Fully connected layers need 1D input
+# - Transition from feature extraction to classification
+
+model.add(Flatten())
+
+# Output shape: (5488,)
+
+print("[INFO] Added Flatten layer")
+
+# ============================================================================
+# FULLY CONNECTED LAYER 1
+# ============================================================================
+
+# Add Dense layer (Fully connected)
+# units=200: 200 neurons
+# activation='relu': ReLU activation
+#
+# This layer learns complex combinations of features
+# 200 neurons: Standard choice (not too small, not too large)
+
+model.add(Dense(200, activation='relu'))
+
+# Output shape: (200,)
+
+print("[INFO] Added Dense layer: 200 neurons")
+
+# ============================================================================
+# DROPOUT LAYER
+# ============================================================================
+
+# Add Dropout layer
+# rate=0.3: Disable 30% of neurons during training
+#
+# How dropout works:
+# - During training: 30% neurons randomly disabled
+# - Remaining 70%: Neurons continue normally
+# - During testing: All neurons active (no dropout)
+#
+# Why dropout?
+# - Prevent overfitting
+# - Force network to learn robust features
+# - Act as implicit ensemble
+
+model.add(Dropout(0.3))
+
+# Output shape: (200,) - same as input
+
+print("[INFO] Added Dropout layer: rate=0.3")
+
+# ============================================================================
+# OUTPUT LAYER
+# ============================================================================
+'''4. Purpose of Softmax in the Output Layer
+Function	Purpose
+Normalization	Converts any real-valued outputs to probabilities (0–1).
+Interpretability	Lets you interpret model output as “confidence” for each class.
+Classification Decision	Highest probability → predicted class (via argmax).
+Smooth Gradients	Provides differentiable output (needed for backpropagation).'''
+# Add Output layer
+# units=10: 10 neurons (one for each digit 0-9)
+# activation='softmax': Probability distribution
+#
+# Softmax: Converts raw outputs to probabilities
+# Output: 10 probabilities summing to 1
+# Predicted digit: argmax(probabilities)
+
+model.add(Dense(10, activation='softmax'))
+
+# Output shape: (10,) - probability distribution
+
+print("[INFO] Added Dense layer: 10 neurons (output)")
+
+# ============================================================================
+# PRINT MODEL SUMMARY
+# ============================================================================
+
+print("\n" + "-"*70)
+print("MODEL ARCHITECTURE SUMMARY")
+print("-"*70)
+
+model.summary()
+
+# ============================================================================
+# STAGE C: TRAINING THE MODEL
+# ============================================================================
+
+print("\n" + "="*70)
+print("STAGE C: TRAINING THE MODEL")
+print("="*70)
+
+print("\nSTEP 6: Compiling the model...\n")
+
+# COMPILE MODEL
+# Optimizer: Algorithm for weight updates
+# Loss: What to minimize
+# Metrics: What to monitor
+
+# Optimizer: Adam
+# Adaptive learning rate optimizer
+# Good default choice for most tasks
+
+# Loss: sparse_categorical_crossentropy
+# For multi-class classification (10 classes)
+# "sparse" means labels are integers (0-9), not one-hot encoded
+'''
+If labels are integers (0–9) → use sparse_categorical_crossentropy
+
+If labels are one-hot encoded vectors → use categorical_crossentropy
+Because this is a multi-class classification problem — 10 output classes (digits 0–9).
+
+Crossentropy measures the difference between:
+
+The true label distribution (actual digit)
+
+The predicted probability distribution (Softmax output)
+The optimizer controls how the network updates its weights after each batch of data.
+
+When your CNN processes images, it calculates errors (loss).
+The optimizer decides how much to change each weight to reduce that error.
+
+🔹 Adam (Adaptive Moment Estimation)
+
+A popular and efficient optimizer that combines advantages of:
+
+Momentum (SGD) → smooths out noisy gradients
+
+Adaptive Learning Rate (RMSProp) → adjusts learning rate for each weight automatically
+
+Requires almost no tuning and works well for most problems.
+
+🔹 Why it’s used:
+
+Fast convergence (fewer epochs)
+
+Automatically adjusts learning rate during training
+
+Works well for both large and small datasets'''
+
+
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+print("[INFO] Model compiled!")
+print("[INFO] Optimizer: Adam")
+print("[INFO] Loss: sparse_categorical_crossentropy")
+print("[INFO] Metrics: accuracy")
+
+print("\nSTEP 7: Training the model...\n")
+
+# TRAIN MODEL
+# fit: Train on training data
+# epochs=2: 2 complete passes through data
+# verbose=1: Show progress bar
+
+print("[INFO] Training started...\n")
+
+history = model.fit(
+    x_train,              # Input images: (60000, 28, 28, 1)
+    y_train,              # Labels: (60000,)
+    epochs=2,             # Number of complete passes through data
+    batch_size=128,       # Process 128 images per batch (implicit)
+    verbose=1             # Show progress
+)
+
+print("\n[INFO] Training completed!")
+
+# ============================================================================
+# STAGE D: ESTIMATING THE MODEL'S PERFORMANCE
+# ============================================================================
+
+print("\n" + "="*70)
+print("STAGE D: ESTIMATING THE MODEL'S PERFORMANCE")
+print("="*70)
+
+print("\nSTEP 8: Evaluating on test set...\n")
+
+# EVALUATE MODEL
+# Evaluate on completely unseen test data
+test_loss, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
+
+print(f"[INFO] Test Loss: {test_loss:.4f}")
+print(f"[INFO] Test Accuracy: {test_accuracy:.4f}")
+print(f"[INFO] Accuracy: {test_accuracy*100:.2f}%")
+
+# MAKE PREDICTIONS
+print("\nSTEP 9: Making predictions on test set...\n")
+
+# Get predictions for all test images
+predictions = model.predict(x_test)
+# predictions shape: (10000, 10)
+# Each row: probabilities for classes 0-9
+
+# Get predicted class for each image
+y_pred = np.argmax(predictions, axis=1)
+# y_pred shape: (10000,)
+# Each value: predicted digit 0-9
+
+print(f"[INFO] Predictions shape: {predictions.shape}")
+print(f"[INFO] Predicted classes: {y_pred.shape}")
+
+# DETAILED EVALUATION
+print("\nSTEP 10: Detailed classification report...\n")
+
+# Classification report for each digit
+print(classification_report(
+    y_test,
+    y_pred,
+    target_names=[str(i) for i in range(10)]
+))
+
+# CONFUSION MATRIX
+print("\nSTEP 11: Confusion matrix...\n")
+
+cm = confusion_matrix(y_test, y_pred)
+
+# Plot confusion matrix
+plt.figure(figsize=(10, 8))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+            xticklabels=range(10), yticklabels=range(10))
+plt.xlabel('Predicted Digit')
+plt.ylabel('True Digit')
+plt.title('Confusion Matrix - CNN MNIST Predictions')
+plt.tight_layout()
+plt.show()
+
+print("[INFO] Confusion matrix plotted!")
+
+# ============================================================================
+# STEP 12 (CUSTOM): SELECT A SPECIFIC DIGIT AND TEST MANUALLY
+# ========================================================================
+
+
+print("\n" + "="*70)
+print("STEP 12 (CUSTOM): SELECT A SPECIFIC DIGIT AND TEST MANUALLY (Simplified)")
+print("="*70)
+
+# Step 1: Choose which digit to test
+digit_to_check = 4  # <-- change this to 0–9
+
+print(f"\nStep 1: Searching for digit '{digit_to_check}' in test set...")
+
+# Step 2: Find all indices for that digit
+indices = np.where(y_test == digit_to_check)[0]
+print(f"Step 2: Found {len(indices)} images of digit '{digit_to_check}' in test set.")
+
+# Step 3: Choose which occurrence to test (e.g., 0 = first, 5 = sixth, etc.)
+chosen_position = 5  # <-- change this number as desired
+chosen_index = indices[chosen_position]
+
+print(f"Step 3: Selected image position {chosen_position} (global index: {chosen_index})")
+
+# Step 4: Prepare image for prediction
+image_for_prediction = x_test[chosen_index].reshape(1, 28, 28, 1)
+
+# Step 5: Make prediction
+prediction_result = model.predict(image_for_prediction, verbose=0)[0]
+
+predicted_digit = np.argmax(prediction_result)
+confidence = np.max(prediction_result)
+
+# Step 6: Display results
+print("\nStep 6: PREDICTION RESULTS")
+print("-" * 70)
+print(f"True Label       : {y_test[chosen_index]}")
+print(f"Predicted Label  : {predicted_digit}")
+print(f"Confidence       : {confidence:.4f} ({confidence*100:.2f}%)")
+
+# Step 7: Show probabilities for all digits
+print("\nStep 7: CLASS PROBABILITIES (for digits 0–9)")
+print("-" * 70)
+for i, prob in enumerate(prediction_result):
+    marker = "<-- Predicted" if i == predicted_digit else ""
+    print(f"Digit {i}: {prob:.4f} {marker}")
+
+# Step 8: Optional - simple visual confirmation (comment out if not needed)
+plt.imshow(x_test[chosen_index, :, :, 0], cmap='gray')
+plt.title(f"True: {y_test[chosen_index]}, Pred: {predicted_digit}")
+plt.axis('off')
+plt.show()
+
+
+## Sir cha code:
+image = x_test[15]
+plt.imshow(image,cmap='Greys')
+plt.show()
+
+image=image.reshape(1,28,28,1)
+prediction = model.predict(image)
+print(np.argmax(prediction))
+
+
+# ============================================================================
+# OPTIONAL: TEST MORE DIGITS
+# ============================================================================
+
+print("\n" + "="*70)
+print("OPTIONAL: TEST MULTIPLE DIGITS")
+print("="*70)
+
+# Test different digits
+test_digits = [0, 3, 7, 9]  # <-- change to test other digits
+
+for digit in test_digits:
+    # Find this digit
+    indices_digit = np.where(y_test == digit)[0]
+    
+    if len(indices_digit) > 0:
+        # Pick first example
+        idx = indices_digit[0]
+        
+        # Prepare for prediction
+        img = x_test[idx].reshape(1, 28, 28, 1)
+        
+        # Predict
+        pred = model.predict(img, verbose=0)
+        pred_label = np.argmax(pred)
+        confidence_digit = np.max(pred)
+        
+        # Print result
+        status = "✅" if digit == pred_label else "❌"
+        print(f"{status} Digit {digit}: Predicted as {pred_label} (confidence: {confidence_digit:.2f})")
+
+print("\n" + "="*70)
+print("CNN TRAINING AND EVALUATION COMPLETE!")
+print("="*70)
+
+print(f"\n📊 Final Results:")
+print(f"   Test Accuracy: {test_accuracy*100:.2f}%")
+print(f"   Total Test Images: {len(y_test)}")
+print(f"   Correctly Predicted: {np.sum(y_pred == y_test)}")
+print(f"   Incorrectly Predicted: {np.sum(y_pred != y_test)}")
+```
+
+---
+"""
+## KEY POINTS FOR YOUR ORAL EXAM
+
+### Model Architecture
+- **Conv2D**: 28 filters, 3×3 kernel → Feature extraction
+- **MaxPooling2D**: 2×2 pool → Spatial reduction
+- **Flatten**: 5488 features → 1D vector
+- **Dense**: 200 neurons → Feature combination
+- **Dropout**: 30% → Prevent overfitting
+- **Output**: 10 neurons + Softmax → Classification
+
+### Data Preprocessing
+- Reshape: (60000, 28, 28) → (60000, 28, 28, 1)
+- Normalize: 0-255 → 0-1
+- No one-hot encoding (sparse_categorical_crossentropy)
+
+### Training
+- Optimizer: Adam
+- Loss: sparse_categorical_crossentropy
+- Epochs: 2 (can increase for better accuracy)
+- Batch size: 128 (implicit)
+
+### Custom Testing Section
+- Select specific digit (0-9)
+- Find all occurrences in test set
+- Pick any example
+- Display image + predictions
+- Show probability distribution
+- Compare with true label
+
+### What to Explain During Oral
+
+1. **Why 4 stages?**
+   - Stage A: Data preparation
+   - Stage B: Model design
+   - Stage C: Training
+   - Stage D: Evaluation
+
+2. **Why Conv2D before Dense?**
+   - Preserve spatial structure
+   - Learn local features
+   - Fewer parameters than fully connected
+
+3. **Why Dropout?**
+   - Prevent overfitting
+   - Regularization technique
+
+4. **What do confidence scores mean?**
+   - Probability model assigns to predicted digit
+   - Higher = more confident
+   - Sum of all probabilities = 1
+
+5. **How to test specific digit?**
+   - Use manual testing section
+   - Can verify predictions visually
+   - Easy to demonstrate during exam
+"""

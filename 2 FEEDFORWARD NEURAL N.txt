@@ -1,0 +1,771 @@
+# ASSIGNMENT 2: FEEDFORWARD NEURAL NETWORK WITH MNIST
+## Complete Code with Line-by-Line Explanations
+
+```python
+# ============================================================================
+# ASSIGNMENT 2: FEEDFORWARD NEURAL NETWORK WITH MNIST - COMPLETE CODE
+# ============================================================================
+# Objective: Build and train feedforward neural network on MNIST dataset
+# Dataset: 60,000 training images + 10,000 test images of handwritten digits
+# Task: Classify handwritten digits (0-9)
+# ============================================================================
+
+# ============================================================================
+# STEP 1: IMPORT ALL NECESSARY PACKAGES
+# ============================================================================
+
+# IMPORT 1: NumPy - Numerical computation library
+import numpy as np
+# Used for: Array operations, mathematical functions, reshaping data
+
+# IMPORT 2: Matplotlib - Visualization and plotting library
+import matplotlib.pyplot as plt
+# Used for: Plotting training curves, visualizing images and predictions
+
+# IMPORT 3: TensorFlow - Deep learning framework by Google
+import tensorflow as tf
+# Used for: Building and training neural networks
+
+# IMPORT 4: Keras datasets - Pre-loaded datasets from Keras
+from tensorflow.keras.datasets import mnist
+# Used for: Loading MNIST dataset (60K training + 10K test images)
+
+# IMPORT 5: Sequential model - For stacking layers linearly
+from tensorflow.keras.models import Sequential
+# Used for: Creating feedforward neural network architecture
+
+# IMPORT 6: Dense and other layers - Building blocks for neural network
+from tensorflow.keras.layers import Dense, Flatten, Dropout
+# Dense: Fully connected layer
+# Flatten: Converts 2D/3D input to 1D vector
+# Dropout: Regularization technique to prevent overfitting
+
+# IMPORT 7: Utilities for label encoding
+from tensorflow.keras.utils import to_categorical
+# Used for: Converting integer labels (0-9) to one-hot vectors
+
+# IMPORT 8: Optimizers - Algorithms for weight updates
+from tensorflow.keras.optimizers import SGD, Adam
+# SGD: Stochastic Gradient Descent with momentum
+# Adam: Adaptive learning rate optimizer
+
+# IMPORT 9: Metrics for evaluation
+from sklearn.metrics import classification_report, confusion_matrix
+# classification_report: Precision, recall, F1-score for each class
+# confusion_matrix: Shows which classes are confused with each other
+
+# IMPORT 10: Seaborn - Statistical data visualization
+import seaborn as sns
+# Used for: Heatmap visualization of confusion matrix
+
+# ============================================================================
+# STEP 2: LOAD AND EXPLORE MNIST DATASET
+# ============================================================================
+
+# LOAD DATASET: keras.datasets.mnist contains pre-loaded MNIST
+# MNIST: Modified National Institute of Standards and Technology database
+# Content: 70,000 images of handwritten digits (0-9)
+#          - 60,000 images for training
+#          - 10,000 images for testing
+# Image format: 28 × 28 pixels (grayscale)
+# Pixel values: 0 (white/background) to 255 (black/foreground)
+
+print("="*70)
+print("STEP 1: LOADING MNIST DATASET")
+print("="*70)
+
+# Load dataset - returns 4 arrays
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+# x_train: Training image data
+# - Shape: (60000, 28, 28)
+# - Meaning: 60,000 images, each 28×28 pixels
+# - Values: 0-255 (pixel intensity)
+
+# y_train: Training labels
+# - Shape: (60000,)
+# - Content: Digit labels (0-9) for each training image
+
+# x_test: Test image data
+# - Shape: (10000, 28, 28)
+# - Test images (not seen during training)
+
+# y_test: Test labels
+# - Shape: (10000,)
+# - Labels for test images
+
+# PRINT DATASET INFORMATION
+print(f"\nTraining images shape: {x_train.shape}")
+print(f"  Meaning: {x_train.shape[0]} images, each {x_train.shape[1]}×{x_train.shape[2]} pixels")
+
+print(f"Training labels shape: {y_train.shape}")
+print(f"  Meaning: {y_train.shape[0]} labels")
+
+print(f"\nTest images shape: {x_test.shape}")
+print(f"Test labels shape: {y_test.shape}")
+
+print(f"\nPixel value range: [{x_train.min()}, {x_train.max()}]")
+print(f"Unique digits: {np.unique(y_train)}")
+
+# VISUALIZE SAMPLE IMAGES
+fig, axes = plt.subplots(2, 5, figsize=(10, 4))
+for i, ax in enumerate(axes.flatten()):
+    # Plot image
+    ax.imshow(x_train[i], cmap='gray')
+    # Set title with digit label
+    ax.set_title(f"Digit: {y_train[i]}")
+    # Remove axis
+    ax.axis('off')
+plt.suptitle("Sample MNIST Images")
+plt.tight_layout()
+plt.show()
+
+# ============================================================================
+# STEP 3: PREPROCESS DATA
+# ============================================================================
+
+print("\n" + "="*70)
+print("STEP 2: DATA PREPROCESSING")
+print("="*70)
+
+# PREPROCESSING PHASE 1: FLATTENING IMAGES
+# Why flatten?
+# - Feedforward neural networks expect 1D input vectors
+# - Images are 2D (28×28 matrix)
+# - Flatten converts 28×28 matrix → 784-element vector
+# - Each pixel becomes one feature in the input vector
+
+# Flatten training images
+x_train_flat = x_train.reshape(-1, 28*28)
+# reshape(-1, 784):
+#   -1 means "infer this dimension" (= 60000)
+#   784 = 28 × 28 (total pixels per image)
+# Result: (60000, 28, 28) → (60000, 784)
+
+# Flatten test images
+x_test_flat = x_test.reshape(-1, 28*28)
+# Result: (10000, 28, 28) → (10000, 784)
+
+print(f"\nFlattened training data shape: {x_train_flat.shape}")
+print(f"Flattened test data shape: {x_test_flat.shape}")
+
+# PREPROCESSING PHASE 2: NORMALIZATION
+# Why normalize?
+# - Pixel values 0-255 are large
+# - Deep learning networks prefer normalized inputs (0-1 or -1 to 1)
+# - Normalization benefits:
+#     1. Faster convergence (smaller gradients)
+#     2. Prevents numerical overflow/underflow
+#     3. Standardizes input scale
+#     4. Better numerical stability
+
+# Convert to float32 for computation
+x_train_flat = x_train_flat.astype('float32')
+x_test_flat = x_test_flat.astype('float32')
+
+# Normalize: Divide by 255 (maximum pixel value)
+x_train_normalized = x_train_flat / 255.0
+x_test_normalized = x_test_flat / 255.0
+
+print(f"\nNormalized pixel range: [{x_train_normalized.min()}, {x_train_normalized.max()}]")
+
+# PREPROCESSING PHASE 3: ONE-HOT ENCODING
+# Why one-hot encode?
+# - Neural networks need numerical targets
+# - Classification requires probability distribution
+# - Categorical crossentropy loss expects one-hot vectors
+# 
+# What is one-hot encoding?
+# - Label 0 → [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+# - Label 3 → [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+# - Label 9 → [0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+# - 10-dimensional binary vector (10 classes = 10 dimensions)
+
+# One-hot encode training labels
+y_train_encoded = to_categorical(y_train, 10)
+# Parameters:
+#   y_train: Original labels (60000,)
+#   10: Number of classes (digits 0-9)
+# Output shape: (60000, 10)
+
+# One-hot encode test labels
+y_test_encoded = to_categorical(y_test, 10)
+# Output shape: (10000, 10)
+
+print(f"\nOne-hot encoded training labels shape: {y_train_encoded.shape}")
+print(f"One-hot encoded test labels shape: {y_test_encoded.shape}")
+
+# Show example encoding
+print(f"\nExample - Label 5 encoded as: {y_train_encoded[100]}")
+
+# ============================================================================
+# STEP 4: BUILD NEURAL NETWORK ARCHITECTURE
+# ============================================================================
+
+print("\n" + "="*70)
+print("STEP 3: BUILDING NEURAL NETWORK")
+print("="*70)
+
+# CREATE SEQUENTIAL MODEL
+# Sequential: Layers stacked linearly (one output feeds into next input)
+# Alternative: Functional API (for more complex architectures)
+
+model = Sequential()
+
+# LAYER 1: FIRST DENSE LAYER
+# Dense layer: Fully connected neurons
+# Parameters:
+#   units=128: 128 neurons in this layer
+#   activation='relu': ReLU activation function
+#   input_shape=(784,): Input is 784-dimensional (flattened images)
+
+# What does this layer do?
+# - Takes 784 input features (pixel values)
+# - Learns 128 hidden representations
+# - ReLU: Non-linear activation (enables learning complex patterns)
+# 
+# ReLU explained:
+# - Rectified Linear Unit: f(x) = max(0, x)
+# - If x < 0: output = 0
+# - If x >= 0: output = x
+# - Why ReLU?
+#   1. Solves vanishing gradient problem
+#   2. Computationally efficient (simple max operation)
+#   3. Works better than sigmoid/tanh in practice
+
+model.add(Dense(units=128, activation='relu', input_shape=(784,)))
+
+# Parameters in this layer:
+# - Weights: 784 × 128 = 100,352
+# - Biases: 128
+# - Total: 100,480 parameters
+
+# Output shape: (batch_size, 128)
+
+# DROPOUT LAYER 1
+# Dropout: Regularization technique to prevent overfitting
+# 
+# How does dropout work?
+# - During training: Randomly disable neurons with probability p
+#   - 20% dropout: 20% of neurons are disabled (set to 0) each iteration
+#   - Remaining 80%: Neurons continue normally
+# - During inference: All neurons active (no dropout)
+#
+# Why is this effective?
+# 1. Forces network to learn redundant representations
+#    - Multiple neurons can represent same feature
+#    - Reduces co-adaptation of neurons
+# 2. Acts as implicit ensemble
+#    - Each training iteration trains different sub-network
+#    - Final model combines many sub-networks
+# 3. Prevents memorization
+#    - Network can't rely on specific neurons
+
+model.add(Dropout(rate=0.2))
+# rate=0.2: Disable 20% of neurons
+# Output shape: (batch_size, 128) - same as input
+
+# LAYER 2: SECOND DENSE LAYER
+# Similar to Layer 1 but with fewer neurons (64 instead of 128)
+# Why fewer neurons?
+# - Progressive dimension reduction
+# - Funnel architecture (128 → 64 → 10)
+# - Reduces parameters in subsequent layers
+# - Computational efficiency
+
+model.add(Dense(units=64, activation='relu'))
+
+# Parameters in this layer:
+# - Weights: 128 × 64 = 8,192
+# - Biases: 64
+# - Total: 8,256 parameters
+
+# Output shape: (batch_size, 64)
+
+# DROPOUT LAYER 2
+# Another 20% dropout for additional regularization
+model.add(Dropout(rate=0.2))
+
+# Output shape: (batch_size, 64)
+
+# LAYER 3: OUTPUT LAYER
+# Dense layer with 10 neurons (one for each digit class)
+# Activation: Softmax
+#
+# Softmax explained:
+# - Converts raw output values to probability distribution
+# - Formula: σ(x_i) = e^(x_i) / Σ(e^(x_j))
+# - Output: 10 probabilities, each 0-1, sum to 1
+# - Example output: [0.05, 0.02, 0.78, 0.01, ..., 0.10]
+#   - 78% confidence digit is 2
+# - Predicted class = argmax(probabilities)
+#   - Example: argmax([0.05, 0.02, 0.78, 0.01, ..., 0.10]) = 2
+
+model.add(Dense(units=10, activation='softmax'))
+
+# Parameters in this layer:
+# - Weights: 64 × 10 = 640
+# - Biases: 10
+# - Total: 650 parameters
+
+# Output shape: (batch_size, 10) - probability distribution
+
+# PRINT MODEL SUMMARY
+print("\nModel Architecture:")
+print("-" * 70)
+model.summary()
+
+# Expected output:
+# ================================================================
+# Layer (type)                 Output Shape              Param #   
+# ================================================================
+# dense (Dense)                (None, 128)               100480    
+# dropout (Dropout)            (None, 128)               0         
+# dense_1 (Dense)              (None, 64)                8256      
+# dropout_1 (Dropout)          (None, 64)                0         
+# dense_2 (Dense)              (None, 10)                650       
+# ================================================================
+# Total params: 109,386
+# Trainable params: 109,386
+
+# ============================================================================
+# STEP 5: COMPILE MODEL
+# ============================================================================
+
+print("\n" + "="*70)
+print("STEP 4: COMPILING MODEL")
+print("="*70)
+
+# DEFINE OPTIMIZER: SGD with Momentum
+# Optimizer: Algorithm that updates weights during training
+# SGD (Stochastic Gradient Descent):
+#   - Updates weights after each mini-batch (not entire dataset)
+#   - "Stochastic" = random sampling of data
+#
+# Momentum:
+#   - Accumulates gradient direction from previous steps
+#   - Helps escape local minima
+#   - Accelerates convergence
+#   - Formula: v_t = momentum × v_{t-1} + gradient_t
+#   - Momentum value typically 0.9
+#
+# Learning rate:
+#   - Controls step size of weight updates
+#   - Too small: Training very slow
+#   - Too large: May skip optimal solution
+#   - Value 0.01: Standard for SGD
+#   - Typical range: 0.0001 to 0.1
+
+sgd_optimizer = SGD(learning_rate=0.01, momentum=0.9)
+
+# Alternative optimizer: Adam
+# - Adaptive learning rate
+# - Often converges faster than SGD
+# - More robust to hyperparameter choices
+# adam_optimizer = Adam(learning_rate=0.001)
+
+# DEFINE LOSS FUNCTION
+# Loss function: Measures difference between predictions and actual labels
+# 
+# Categorical Crossentropy:
+# - Used for multi-class classification (10 classes)
+# - Formula: L = -Σ(y_true × log(y_pred))
+#   - y_true: One-hot encoded true label
+#   - y_pred: Predicted probability
+#   - log(y_pred): Natural logarithm
+#
+# Example:
+# - True: [0, 0, 0, 1, 0, 0, 0, 0, 0, 0] (label 3)
+# - Pred: [0.01, 0.02, 0.05, 0.85, 0.02, 0.01, 0.02, 0.01, 0.01, 0.00]
+# - Loss: -log(0.85) ≈ 0.163 (low loss, good prediction)
+#
+# If prediction was wrong:
+# - Pred: [0.01, 0.02, 0.05, 0.05, 0.02, 0.01, 0.02, 0.01, 0.01, 0.80]
+# - Loss: -log(0.05) ≈ 2.996 (high loss, bad prediction)
+
+loss_function = 'categorical_crossentropy'
+
+# DEFINE METRICS
+# Metrics: What to monitor during training (not used for optimization)
+# Accuracy: Percentage of correct predictions
+# - Example: 956 correct out of 1000 → 95.6% accuracy
+
+metrics_list = ['accuracy']
+
+# COMPILE MODEL
+# Configure model for training with optimizer, loss, and metrics
+
+model.compile(
+    optimizer=sgd_optimizer,      # Weight update algorithm
+    loss=loss_function,           # Optimization objective
+    metrics=metrics_list          # Monitoring metrics
+)
+
+print("\nModel compiled with:")
+print(f"  Optimizer: SGD (learning_rate=0.01, momentum=0.9)")
+print(f"  Loss: Categorical Crossentropy")
+print(f"  Metrics: Accuracy")
+
+# ============================================================================
+# STEP 6: TRAIN MODEL
+# ============================================================================
+
+print("\n" + "="*70)
+print("STEP 5: TRAINING MODEL")
+print("="*70)
+
+# TRAINING PROCESS EXPLANATION
+# Training updates network weights to minimize loss
+# Process for each epoch:
+#   1. Shuffle training data
+#   2. Divide into mini-batches
+#   3. For each mini-batch:
+#      a. Forward pass: Compute predictions
+#      b. Calculate loss
+#      c. Backward pass: Compute gradients (backpropagation)
+#      d. Update weights: W_new = W_old - learning_rate × gradient
+#   4. Calculate validation loss/metrics on validation set
+#   5. Print progress
+
+# FIT MODEL: Train on data
+history = model.fit(
+    # TRAINING DATA PARAMETERS
+    x=x_train_normalized,              # Input features: (60000, 784)
+    y=y_train_encoded,                 # Target labels: (60000, 10)
+    
+    # TRAINING HYPERPARAMETERS
+    batch_size=128,
+    # Batch size: Number of samples processed before weight update
+    # 128 samples per batch
+    # Why 128?
+    #   - Smaller batch: Noisier gradients, more updates per epoch, slower per update
+    #   - Larger batch: Smoother gradients, fewer updates per epoch, faster per update
+    #   - 128 is common compromise
+    # Calculation: 60000 / 128 ≈ 469 batches per epoch
+    
+    epochs=15,
+    # Epochs: Number of times to cycle through entire training dataset
+    # 15 epochs: See each training sample 15 times
+    # Why 15?
+    #   - Too few: Underfitting (incomplete learning)
+    #   - Too many: Overfitting (memorizing training data)
+    #   - 15 is reasonable for MNIST
+    
+    # VALIDATION PARAMETERS
+    validation_split=0.2,
+    # Validation split: 20% of training data reserved for validation
+    # 60000 × 0.2 = 12,000 validation samples
+    # 60000 × 0.8 = 48,000 actual training samples
+    # Why validation?
+    #   - Monitor performance on unseen data during training
+    #   - Detect overfitting (training loss decreasing, validation loss increasing)
+    #   - Early stopping trigger
+    
+    # VERBOSITY
+    verbose=1
+    # verbose=1: Show progress bar for each epoch
+    # verbose=0: No output
+    # verbose=2: One line per epoch
+)
+
+# HISTORY OBJECT
+# history contains training metrics per epoch
+# history.history['loss']: Training loss per epoch
+# history.history['val_loss']: Validation loss per epoch
+# history.history['accuracy']: Training accuracy per epoch
+# history.history['val_accuracy']: Validation accuracy per epoch
+
+print("\nTraining completed!")
+print(f"Final training loss: {history.history['loss'][-1]:.4f}")
+print(f"Final training accuracy: {history.history['accuracy'][-1]:.4f}")
+print(f"Final validation loss: {history.history['val_loss'][-1]:.4f}")
+print(f"Final validation accuracy: {history.history['val_accuracy'][-1]:.4f}")
+
+# ============================================================================
+# STEP 7: EVALUATE MODEL
+# ============================================================================
+
+print("\n" + "="*70)
+print("STEP 6: EVALUATING MODEL")
+print("="*70)
+
+# EVALUATE ON TEST SET
+# Test set: Completely unseen data
+# Important: Only used for final evaluation (not during training/validation)
+
+test_loss, test_accuracy = model.evaluate(x_test_normalized, y_test_encoded, verbose=0)
+
+print(f"\nTest Loss: {test_loss:.4f}")
+print(f"Test Accuracy: {test_accuracy:.4f}")
+print(f"  Meaning: {test_accuracy*100:.2f}% of test images correctly classified")
+
+# MAKE PREDICTIONS
+# model.predict returns probability distributions for each class
+
+y_pred_proba = model.predict(x_test_normalized)
+# Shape: (10000, 10)
+# Each row: 10 probabilities for classes 0-9
+
+# Get predicted class: argmax of probabilities
+y_pred_class = np.argmax(y_pred_proba, axis=1)
+# For each sample, select class with highest probability
+# Example: [0.01, 0.02, 0.78, ...] → class 2
+
+# DETAILED EVALUATION METRICS
+print("\n" + "-"*70)
+print("Detailed Classification Report:")
+print("-"*70)
+print(classification_report(y_test, y_pred_class, 
+                          target_names=[str(i) for i in range(10)]))
+
+# Classification report for each digit:
+# - Precision: TP / (TP + FP) - Of predicted positives, how many correct?
+# - Recall: TP / (TP + FN) - Of actual positives, how many found?
+# - F1-score: Harmonic mean of precision and recall
+# - Support: Number of actual instances
+
+# ============================================================================
+# STEP 8: VISUALIZE TRAINING HISTORY
+# ============================================================================
+
+print("\n" + "="*70)
+print("STEP 7: VISUALIZING TRAINING HISTORY")
+print("="*70)
+
+# Create figure with 2 subplots side by side
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+# PLOT 1: LOSS
+# Training loss should decrease over epochs
+# Validation loss should also decrease, but may increase if overfitting
+
+ax1.plot(history.history['loss'], label='Training Loss', linewidth=2, color='blue')
+ax1.plot(history.history['val_loss'], label='Validation Loss', linewidth=2, color='red')
+ax1.set_xlabel('Epoch', fontsize=12)
+ax1.set_ylabel('Loss', fontsize=12)
+ax1.set_title('Model Loss vs Epoch', fontsize=14, fontweight='bold')
+ax1.legend(fontsize=10)
+ax1.grid(True, alpha=0.3)
+
+# Interpretation:
+# - If both curves decrease together: Good learning
+# - If training decreases but validation increases: Overfitting
+# - If both increase: Underfitting (model too simple)
+
+# PLOT 2: ACCURACY
+# Both training and validation accuracy should increase
+
+ax2.plot(history.history['accuracy'], label='Training Accuracy', 
+         linewidth=2, color='green')
+ax2.plot(history.history['val_accuracy'], label='Validation Accuracy', 
+         linewidth=2, color='orange')
+ax2.set_xlabel('Epoch', fontsize=12)
+ax2.set_ylabel('Accuracy', fontsize=12)
+ax2.set_title('Model Accuracy vs Epoch', fontsize=14, fontweight='bold')
+ax2.legend(fontsize=10)
+ax2.grid(True, alpha=0.3)
+
+# Interpretation:
+# - Accuracy should increase (curves going up)
+# - Training and validation curves should be close
+# - If training >> validation: Overfitting
+
+plt.tight_layout()
+plt.show()
+
+# ============================================================================
+# STEP 9: CONFUSION MATRIX
+# ============================================================================
+
+print("\n" + "="*70)
+print("STEP 8: CONFUSION MATRIX ANALYSIS")
+print("="*70)
+
+# COMPUTE CONFUSION MATRIX  
+# Confusion matrix: Shows which classes model confuses with each other
+# Diagonal values: Correct predictions
+# Off-diagonal values: Misclassifications
+
+cm = confusion_matrix(y_test, y_pred_class)
+
+# cm[i][j] = Number of samples with true class i predicted as class j
+# Example: cm[3][2] = 5 means 5 samples of digit 3 predicted as digit 2
+
+# PLOT CONFUSION MATRIX
+plt.figure(figsize=(10, 8))
+
+# Heatmap: Color visualization of matrix
+# Darker colors: More instances
+# Light colors: Fewer instances
+
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=True,
+            xticklabels=range(10), yticklabels=range(10))
+
+plt.xlabel('Predicted Class', fontsize=12)
+plt.ylabel('True Class', fontsize=12)
+plt.title('Confusion Matrix - MNIST Digit Predictions', 
+         fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# ANALYSIS
+# Diagonal = correct predictions
+# Off-diagonal = errors
+# Example interpretation:
+#   - Digit 4 often confused with 9: They look similar
+#   - Digit 0 rarely confused with others: Distinctive shape
+
+# ============================================================================
+# ============================================================================
+# STEP 10: VISUALIZE SAMPLE PREDICTIONS (Simplified for Practicals)
+# ============================================================================
+
+print("\n" + "="*70)
+print("STEP 10: VISUALIZING SAMPLE PREDICTIONS (Simplified)")
+print("="*70)
+
+# Select 5 random test images
+for i in range(5):
+    # Pick a random index
+    idx = np.random.randint(0, len(x_test))
+    
+    # Get true label
+    true_label = y_test[idx]
+    
+    # Preprocess image (flatten + normalize)
+    image = x_test[idx].reshape(1, 28*28).astype('float32') / 255.0
+    
+    # Predict using trained model
+    prediction = model.predict(image, verbose=0)
+    predicted_label = np.argmax(prediction)
+    
+    # Display image and prediction
+    plt.imshow(x_test[idx], cmap='gray')
+    plt.title(f"True: {true_label}, Pred: {predicted_label}")
+    plt.axis('off')
+    plt.show()
+
+# ========================================================================
+# STEP 10 (CUSTOM): SELECT A SPECIFIC IMAGE OF DIGIT 4 OR 5
+# ========================================================================
+
+# 1️⃣ Choose which digit to test
+digit_to_check = 9 # <-- change to 5 if you want to test digit "5"
+
+# 2️⃣ Get all indices of this digit in test set
+indices = np.where(y_test == digit_to_check)[0]
+print(f"Found {len(indices)} images of digit '{digit_to_check}' in test set.")
+
+# 3️⃣ Choose a specific image among them (for example, the 5th '4')
+chosen_index = indices[5]  # you can change 5 to any number < len(indices)
+
+# 4️⃣ Show which global index this is (for curiosity)
+print(f"Global test index: {chosen_index}")
+
+# 5️⃣ Visualize this specific image
+plt.imshow(x_test[chosen_index], cmap='gray')
+plt.title(f"Digit {digit_to_check} - Example #{5} (Global idx: {chosen_index})")
+plt.axis('off')
+plt.show()
+
+# 6️⃣ Prepare this image for prediction (flatten + normalize)
+image = x_test[chosen_index].reshape(1, 28*28).astype('float32') / 255.0
+
+# 7️⃣ Predict using trained model
+prediction = model.predict(image)
+predicted_label = np.argmax(prediction)
+confidence = np.max(prediction)
+
+# 8️⃣ Print prediction results
+print(f"\nTrue Label: {y_test[chosen_index]}")
+print(f"Predicted Label: {predicted_label}")
+print(f"Prediction Confidence: {confidence:.4f}")
+
+# 9️⃣ Show again with prediction info
+plt.imshow(x_test[chosen_index], cmap='gray')
+plt.title(f"True: {y_test[chosen_index]} | Pred: {predicted_label} ({confidence:.2f})")
+plt.axis('off')
+plt.show()
+
+# ============================================================================
+# STEP 11: SAVE MODEL (OPTIONAL)
+# ============================================================================
+
+print("\n" + "="*70)
+print("STEP 10: MODEL SUMMARY")
+print("="*70)
+
+print(f"\nFinal Results:")
+print(f"  Training Accuracy: {history.history['accuracy'][-1]:.4f}")
+print(f"  Validation Accuracy: {history.history['val_accuracy'][-1]:.4f}")
+print(f"  Test Accuracy: {test_accuracy:.4f}")
+print(f"  Total Parameters: {model.count_params():,}")
+
+# To save model:
+# model.save('/path/to/model.h5')
+# 
+# To load model:
+# from tensorflow.keras.models import load_model
+# model = load_model('/path/to/model.h5')
+
+print("\n" + "="*70)
+print("TRAINING COMPLETE!")
+print("="*70)
+```
+
+"""
+
+## KEY CONCEPTS SUMMARY
+
+### Flattening
+- Converts 28×28 image → 784-element vector
+- Required for feedforward networks (expect 1D input)
+- Loses spatial structure but preserves pixel information
+
+### Normalization
+- Scales pixel values from 0-255 to 0-1
+- Faster convergence + numerical stability
+- Standard practice in deep learning
+
+### One-Hot Encoding
+- Label 3 → [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+- Required for categorical crossentropy loss
+- Creates probability distribution format
+
+### Dropout
+- Disable random neurons during training
+- Prevents overfitting
+- Act as implicit ensemble
+
+### Softmax
+- Converts 10 raw values to 10 probabilities
+- Sum to 1
+- Enables probability interpretation
+
+### Training Process
+1. Forward pass (prediction)
+2. Calculate loss
+3. Backward pass (backpropagation)
+4. Update weights
+5. Repeat for each batch/epoch
+
+---
+
+## COMMON QUESTIONS
+
+**Q: Why flatten images?**
+A: Feedforward networks need 1D input. Flattening preserves all pixel info while converting to correct format.
+
+**Q: Why normalize?**
+A: Speeds up training, prevents numerical issues, standardizes input scale.
+
+**Q: What does dropout=0.2 mean?**
+A: During training, 20% of neurons randomly disabled each iteration. Forces network to learn redundant features.
+
+**Q: How to detect overfitting?**
+A: Training accuracy increases but validation accuracy plateaus/decreases. Solution: Increase dropout, add L2, or use early stopping.
+
+**Q: Why use SGD with momentum?**
+A: Momentum helps escape local minima and accelerates convergence. Standard momentum value: 0.9.
+
+"""

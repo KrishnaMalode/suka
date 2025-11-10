@@ -1,0 +1,289 @@
+# ==================================================================================================
+# COMBINED: WordCloud + Text Preprocessing + CBOW (Keras) TRAINING - Detailed Comments
+# ==================================================================================================
+
+# ---------------------------
+# Imports and environment
+# ---------------------------
+import re                                 # regex for cleaning text
+import numpy as np                        # numeric operations and arrays
+import string                             # string constants (if needed)
+import pandas as pd                       # optional, not heavily used here but commonly available
+import matplotlib.pyplot as plt           # plotting (wordcloud + PCA if needed)
+# %matplotlib inline                      # Uncomment if using a Jupyter notebook to display plots inline
+
+from wordcloud import WordCloud, STOPWORDS # wordcloud visualization
+
+# TensorFlow / Keras for building the CBOW model
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Embedding, Lambda, Dense
+from tensorflow.keras.optimizers import Adam
+
+# NLTK for stopword removal
+import nltk
+nltk.download('stopwords', quiet=True)
+from nltk.corpus import stopwords
+
+# For reproducibility
+np.random.seed(42)
+tf.random.set_seed(42)
+
+# ---------------------------
+# STEP 1: WordCloud (visual)
+# ---------------------------
+# Define stopwords for visualization (WordCloud has its own STOPWORDS set)
+wc_stopwords = set(STOPWORDS)
+
+# Multiline paragraph used for both the word cloud and CBOW processing
+sentences = """We are about to study the idea of a computational process.
+Computational processes are abstract beings that inhabit computers.
+As they evolve, processes manipulate other abstract things called data.
+The evolution of a process is directed by a pattern of rules
+called a program. People create programs to direct processes. In effect,
+we conjure the spirits of the computer with our spells."""
+
+# Generate a word cloud that ignores common stopwords (visual purpose)
+wordcloud = WordCloud(
+    background_color='white',
+    stopwords=wc_stopwords,
+    max_words=200,
+    max_font_size=40,
+    random_state=42
+).generate(sentences)
+
+# Display the word cloud
+fig, ax = plt.subplots(figsize=(8, 8))
+ax.imshow(wordcloud, interpolation='bilinear')
+ax.axis('off')
+plt.show()
+
+# ---------------------------
+# STEP 2: CLEAN & PREPROCESS TEXT
+# ---------------------------
+# Reuse the same text for model training
+text = sentences  # keep original 'sentences' separate from transformed 'text' for clarity
+
+# 1) Remove special characters: keep only letters and digits, replace others with space
+#    This removes punctuation and newlines, making tokenization simpler.
+text = re.sub('[^A-Za-z0-9]+', ' ', text)
+
+# 2) Remove single-character tokens (like 'a' or isolated punctuation that remained)
+#    Regex matches any single word-character that is bounded by start/end or spaces.
+text = re.sub(r'(?:^| )\w(?:$| )', ' ', text).strip()
+
+# 3) Lowercase everything to normalize tokens ('The' -> 'the')
+text = text.lower()
+print("After lowercasing and cleaning:\n", text)
+print()
+
+# ---------------------------
+# STEP 3: STOPWORD REMOVAL
+# ---------------------------
+# Remove English stopwords using NLTK's list. This is optional for some CBOW experiments,
+# but you asked that stopwords should be removed here.
+
+stop_words = set(stopwords.words('english'))   # English stopwords set
+tokens = text.split()                          # naive whitespace tokenization (sufficient after cleaning)
+tokens_no_stop = [tok for tok in tokens if tok not in stop_words]  # filter stopwords
+
+# Recreate the cleaned sentence without stopwords (useful for printing and for token list)
+text = ' '.join(tokens_no_stop)
+print("After removing stopwords:\n", text)
+print()
+
+# ---------------------------
+# STEP 4: TOKENIZATION & VOCABULARY
+# ---------------------------
+# Token list (words)
+words = text.split()
+print("Tokenized words:\n", words)
+print()
+
+# Vocabulary: unique set of tokens
+vocab = sorted(list(set(words)))   # sorted for deterministic ordering
+print("Vocabulary (unique words):\n", vocab)
+print()
+
+vocab_size = len(vocab)
+print("Vocabulary size:", vocab_size)
+print()
+
+# Choose embedding dimensionality (small for demonstration)
+embed_dim = 10
+
+# Context window: number of words on each side to use (here we will use 2 on each side)
+context_size = 2    # means total context words = 2*context_size
+
+# Create mappings word <-> index
+word_to_ix = {w: i for i, w in enumerate(vocab)}
+ix_to_word = {i: w for i, w in enumerate(vocab)}
+
+print("word_to_ix mapping:")
+print(word_to_ix)
+print()
+
+# ---------------------------
+# STEP 5: CREATE (CONTEXT, TARGET) TRAINING PAIRS
+# ---------------------------
+# We build CBOW training pairs where context = the n words on left + n words on right,
+# and target = the center word. Since we removed stopwords, token distances reflect new spacing.
+
+data = []             # will hold tuples (context_indices_list, target_index)
+contexts = []         # context indices for model input
+targets = []          # target indices for labels
+
+# Build data ensuring we have enough neighbors on both sides
+for i in range(context_size, len(words) - context_size):
+    # gather context tokens (left and right)
+    context_tokens = words[i - context_size: i] + words[i + 1: i + 1 + context_size]
+    target_token = words[i]
+    # convert to indices
+    context_idxs = [word_to_ix[w] for w in context_tokens]
+    target_idx = word_to_ix[target_token]
+    contexts.append(context_idxs)
+    targets.append(target_idx)
+    data.append((context_tokens, target_token))
+
+# Print a few examples to verify
+print("Sample (context_tokens, target_token) pairs (first 8):")
+for ctxt, tgt in data[:8]:
+    print(f"  context={ctxt}  -> target={tgt}")
+print()
+
+contexts = np.array(contexts)  # shape = (num_samples, 2*context_size)
+targets = np.array(targets)    # shape = (num_samples,)
+
+print("Contexts array shape:", contexts.shape)
+print("Targets array shape:", targets.shape)
+print()
+
+# ---------------------------
+# STEP 6: BUILD SIMPLE CBOW MODEL (Keras)
+# ---------------------------
+# Architecture:
+#  - Input: context word indices (2*context_size integers)
+#  - Embedding layer: maps each index to an embedding vector (shared for all context words)
+#  - Aggregation: average (mean) the context embeddings -> single vector
+#  - Dense + softmax: predict target word index over full vocabulary
+
+# Input layer: expects '2*context_size' integers per sample (context word indices)
+input_len = 2 * context_size     # number of context words used per sample
+inputs = Input(shape=(input_len,), dtype='int32', name='context_input')
+
+# Shared embedding layer for context words
+# input_dim = vocab_size, output_dim = embed_dim
+emb_layer = Embedding(input_dim=vocab_size, output_dim=embed_dim, input_length=input_len, name='embedding')
+
+# Get embedded vectors for each context word: shape -> (batch_size, input_len, embed_dim)
+embedded_context = emb_layer(inputs)
+
+# Aggregate context embeddings by taking the mean across the input_len dimension.
+# Resulting shape -> (batch_size, embed_dim)
+average_context = Lambda(lambda x: tf.reduce_mean(x, axis=1), name='average')(embedded_context)
+
+# Output layer: predict distribution over vocabulary
+output = Dense(vocab_size, activation='softmax', name='output')(average_context)
+
+# Create and compile model
+cbow_model = Model(inputs=inputs, outputs=output)
+cbow_model.compile(optimizer=Adam(learning_rate=0.01),
+                   loss='sparse_categorical_crossentropy',
+                   metrics=['accuracy'])
+
+cbow_model.summary()
+
+# ---------------------------
+# STEP 7: TRAIN CBOW MODEL
+# ---------------------------
+# Convert contexts -> shape (num_samples, input_len) already; targets is (num_samples,)
+# Train for a modest number of epochs (this is a tiny dataset; do not expect large accuracy)
+history = cbow_model.fit(contexts, targets,
+                         batch_size=4,
+                         epochs=120,
+                         verbose=1)
+
+# ---------------------------
+# STEP 8: OUTPUTS AND EXAM-READY CHECKS
+# ---------------------------
+
+# 1) Print final training loss & accuracy
+final_loss = history.history['loss'][-1]
+final_acc = history.history['accuracy'][-1]
+print(f"\nFinal training loss: {final_loss:.4f}  -  Final training accuracy: {final_acc:.4f}\n")
+
+# 2) Inspect learned embeddings (weights of embedding layer)
+learned_embeddings = cbow_model.get_layer('embedding').get_weights()[0]
+print("Learned embeddings shape:", learned_embeddings.shape)
+print("Embedding vector for first vocab item (example):", learned_embeddings[0])
+print()
+
+# 3) Show some example predictions: use contexts from dataset and show predicted vs true
+num_examples = min(10, len(contexts))
+print("Example predictions (context -> predicted / actual):")
+pred_probs = cbow_model.predict(contexts[:num_examples])
+predicted_idxs = np.argmax(pred_probs, axis=1)
+
+for i in range(num_examples):
+    ctxt_words = [ix_to_word[idx] for idx in contexts[i]]
+    pred_word = ix_to_word[predicted_idxs[i]]
+    true_word = ix_to_word[targets[i]]
+    prob = pred_probs[i, predicted_idxs[i]]
+    print(f"Context: {ctxt_words} -> Predicted: {pred_word} ({prob:.2f})  |  Actual: {true_word}")
+
+# 4) Save the Keras model and the learned embeddings (optional)
+cbow_model.save('cbow_keras_model.h5')
+np.save('cbow_embeddings.npy', learned_embeddings)
+
+print("\nCBOW model saved to 'cbow_keras_model.h5' and embeddings to 'cbow_embeddings.npy'")
+
+# ---------------------------
+# Wrap-up: what you now have
+# ---------------------------
+# - WordCloud visualization (top)
+# - Cleaned token list with stopwords removed
+# - Vocabulary mapping (word_to_ix / ix_to_word)
+# - Context-target pairs for CBOW
+# - Trained CBOW model (Keras) and learned embeddings
+# - Example predictions and saved artifacts for later use
+#
+# Notes:
+# - This is a minimal demonstration. For high-quality embeddings, use larger corpora.
+# - You can tweak hyperparameters: embed_dim, window size (context_size), epochs, optimizer, etc.
+# - For production-level Word2Vec, gensim's implementation is optimized and recommended.
+
+
+
+
+## KEY CONCEPTS
+
+### CBOW (Continuous Bag of Words)
+- **Input**: Context words (surrounding words)
+- **Output**: Target word (center word)
+- **Learning**: Neural network predicts center from context
+- **Result**: Word embeddings capturing semantic relationships
+
+### Word Embeddings
+- Each word represented as 100-dimensional vector
+- Similar words have similar vectors
+- Learned from context (distributional hypothesis)
+- Can capture relationships: king - man + woman ≈ queen
+
+### How CBOW Learns
+1. Window slides through sentences
+2. For each window, try to predict center word
+3. Backpropagation updates embeddings
+4. Words in similar contexts get similar vectors
+
+### Applications
+- Word similarity (find similar words)
+- Word analogy (king - man + woman = ?)
+- Document classification
+- Sentiment analysis
+- Recommendation systems
+
+### Gensim Word2Vec
+- `vector_size`: Embedding dimension (100)
+- `window`: Context window size (3 words each side)
+- `min_count`: Minimum word frequency (2)
+- `sg`: 0 for CBOW, 1 for Skip-gram
