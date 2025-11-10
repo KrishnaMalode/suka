@@ -1,0 +1,160 @@
+# ------------------------------------------------------
+# TRANSFER LEARNING USING VGG16 FOR FLOWER CLASSIFICATION
+# ------------------------------------------------------
+
+# -----------------------------------------------
+# THEORY:
+# Transfer Learning means reusing a pre-trained model 
+# (already trained on a large dataset like ImageNet)
+# and adapting it for a new but related task.
+# In this project, we use the pre-trained VGG16 model 
+# to classify flower images into 5 categories.
+# -----------------------------------------------
+
+# Step 1: Import required libraries
+import tensorflow_datasets as tfds          # Library to easily load popular datasets
+import tensorflow as tf                     # Deep learning framework
+from tensorflow.keras.utils import to_categorical  # Function to convert labels into one-hot vectors
+
+# -----------------------------------------------------------
+# THEORY:
+# TensorFlow Datasets (TFDS) provides ready-to-use datasets.
+# One-hot encoding is necessary for multi-class classification 
+# using softmax activation and categorical crossentropy loss.
+# -----------------------------------------------------------
+
+# Step 2: Load the TF Flowers dataset and split into train/test
+(train_ds, train_labels), (test_ds, test_labels) = tfds.load(
+    "tf_flowers",                           # Dataset name
+    split=["train[:70%]", "train[70%:]"],   # 70% for training, 30% for testing
+    batch_size=-1,                          # Load entire data into memory as one batch
+    as_supervised=True                      # Returns (image, label) tuples
+)
+
+# Step 3: Resize all images to 150x150 because CNN models 
+# require fixed input dimensions.
+train_ds = tf.image.resize(train_ds, (150, 150))
+test_ds = tf.image.resize(test_ds, (150, 150))
+
+# Step 4: Convert integer labels into one-hot encoded format (for 5 flower classes)
+train_labels = to_categorical(train_labels, num_classes=5)
+test_labels = to_categorical(test_labels, num_classes=5)
+
+# -----------------------------------------------------------
+# THEORY:
+# One-hot encoding example:
+# Label 2 --> [0, 0, 1, 0, 0]
+# This format matches the number of neurons in the output layer.
+# -----------------------------------------------------------
+
+# Step 5: Import pre-trained VGG16 model and preprocessing function
+from tensorflow.keras.applications.vgg16 import VGG16, preprocess_input
+
+# Step 6: Load pre-trained VGG16 model without its top layers
+# include_top=False removes VGG16’s fully connected (Dense) layers.
+base_model = VGG16(
+    weights="imagenet",           # Load weights trained on ImageNet dataset
+    include_top=False,            # Exclude the classifier layers at the top
+    input_shape=(150, 150, 3)     # Input image size (same as our resized images)
+)
+
+# Step 7: Freeze VGG16 base so its weights are not updated during training
+base_model.trainable = False
+
+# -----------------------------------------------------------
+# THEORY:
+# "Freezing" means keeping pretrained weights unchanged so 
+# training focuses only on newly added layers.
+# This speeds up training and prevents overfitting.
+# -----------------------------------------------------------
+
+# Step 8: Preprocess input images as per VGG16’s expected input format
+train_ds = preprocess_input(train_ds)
+test_ds = preprocess_input(test_ds)
+
+# Step 9: Build custom top layers (classification head) 
+# on top of the frozen VGG16 base.
+from tensorflow.keras import layers, models
+
+model = models.Sequential([
+    base_model,                           # Pretrained feature extractor
+    layers.Flatten(),                     # Convert extracted features into 1D
+    layers.Dense(50, activation='relu'),  # First dense layer for learning new patterns
+    layers.Dense(20, activation='relu'),  # Second dense layer (smaller)
+    layers.Dense(5, activation='softmax') # Final output layer for 5 classes
+])
+
+# -----------------------------------------------------------
+# THEORY:
+# Softmax converts outputs into probabilities summing to 1.
+# The number of neurons (5) equals the number of flower classes.
+# -----------------------------------------------------------
+
+# Step 10: Compile the model with optimizer, loss function, and metrics
+model.compile(
+    optimizer='adam',                      # Optimizer for adaptive learning
+    loss='categorical_crossentropy',       # Best suited for multi-class tasks
+    metrics=['accuracy']                   # We measure model accuracy
+)
+
+# Step 11: Train the model
+history = model.fit(
+    train_ds, train_labels,
+    epochs=10,                             # Run for 10 complete passes over data
+    validation_split=0.2,                  # 20% of training data used for validation
+    batch_size=32                          # Number of samples per batch
+)
+
+# Step 12: Evaluate model on unseen test data
+loss, accuracy = model.evaluate(test_ds, test_labels)
+print("Loss:", loss)
+print("Accuracy:", accuracy)
+
+# Step 13: Plot training accuracy graph for performance visualization
+import matplotlib.pyplot as plt
+plt.plot(history.history['accuracy'])
+plt.title('Training Accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.show()
+
+# -----------------------------------------------------------
+# THEORY SUMMARY:
+# 1. Transfer learning uses features from a pre-trained CNN (like VGG16).
+# 2. Only the new classifier layers are trained.
+# 3. It reduces training time and improves accuracy.
+# -----------------------------------------------------------
+
+# -----------------------------------------------------------
+# VIVA QUESTIONS:
+
+#What is Transfer Learning?
+Transfer learning is a technique where a model trained on a large dataset for one task is reused (partially or fully) for a different but related task. It saves time and resources since you don’t train from scratch but leverage previously learned features.
+
+Why do we freeze the layers of VGG16?
+Freezing the layers prevents their weights from being updated during training. This helps preserve the useful feature detectors learned on ImageNet and reduces the risk of overfitting when you have a smaller new dataset.
+
+What is the difference between include_top=True and include_top=False?
+include_top=True loads the full pre-trained model including the final fully connected layers used for classification on ImageNet (1000 classes). include_top=False excludes these dense layers, allowing you to add your own custom classifier suitable for your specific number of classes.
+
+Why use one-hot encoding for labels?
+One-hot encoding converts integer class labels into vectors with binary flags, which is essential for multi-class classification with softmax and categorical cross-entropy loss. It allows the model to output probabilities for each class.
+
+What is the role of preprocess_input?
+It formats input images to match the pre-processing the original VGG16 training used (e.g., subtracting the mean RGB values, scaling). This step ensures the image data fits the distribution the model expects for accurate predictions.
+
+What is the activation function used in the output layer and why?
+Softmax is used in the output layer because it converts the raw model outputs (logits) into probabilities for each class. The class with the highest probability is interpreted as the predicted class.
+
+What optimizer and loss function have been used here?
+Adam optimizer is used; it is an adaptive algorithm that adjusts learning rates during training for faster convergence. The loss function is categorical crossentropy, appropriate for multi-class classification tasks with one-hot encoded labels.
+
+How is categorical crossentropy different from binary crossentropy?
+Categorical crossentropy is for multi-class classification where each sample belongs to exactly one of many classes, used with one-hot labels. Binary crossentropy is for binary classification (two classes), often used with a single probability output.
+
+What happens if we make base_model.trainable = True?
+The weights of the VGG16 base model become trainable, so the entire model will be fine-tuned on your dataset. This can improve accuracy if you have enough data, but it requires more computation and risks overfitting if data is small.
+
+What is the input and output shape of VGG16 in this program?
+Input shape is (150, 150, 3), the resized color images. Output shape is the feature map tensor from the last convolutional layer (since include_top=False), which is flattened and passed through custom dense layers to produce a final output of shape (5,) corresponding to 5 classes.
+# -----------------------------------------------------------

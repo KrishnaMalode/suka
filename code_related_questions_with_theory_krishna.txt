@@ -1,0 +1,463 @@
+
+## CODE-RELATED QUESTIONS
+
+### Assignment 2 (MNIST Feedforward Network)
+
+**Q21: Why do we flatten MNIST images?**
+A: Feedforward networks expect 1D input. Images are 2D (28×28). Flattening converts to 1D vector (784 values). This preserves all pixel information but loses spatial structure (doesn't matter for simple classification).
+
+**Q22: What does one-hot encoding do? Why is it necessary?**
+A: Converts class labels (0-9) to 10-dimensional binary vectors.
+- Label 3 → [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+- Necessary for categorical crossentropy loss
+- Allows softmax output (probability distribution)
+
+**Q23: Explain the training loop: forward pass → loss → backward → update.**
+A:
+1. Forward: Compute predictions through network
+2. Loss: Compare with actual labels
+3. Backward: Compute gradients using backpropagation
+4. Update: W_new = W_old - learning_rate × gradient
+
+This repeats for each batch.
+
+**Q24: Why use SGD with momentum instead of plain GD?**
+A:
+- Plain GD: Can oscillate, slow convergence
+- Momentum: Accumulates gradient direction
+- Faster convergence
+- Escapes local minima better
+- Momentum=0.9: Standard value
+
+**Q25: What does dropout=0.2 mean? How does it prevent overfitting?**
+A: During training, disable 20% of neurons randomly each iteration.
+
+Prevents overfitting:
+- Forces network to learn redundant representations
+- Reduces co-adaptation
+- Each iteration uses different sub-network
+- Acts as ensemble of networks
+
+**Q26: How to interpret training vs validation accuracy curves?**
+A:
+- Both increasing, close: Good (learning well)
+- Training high, validation low: Overfitting (memorizing)
+- Both low: Underfitting (too simple)
+- Increasing then plateauing: Convergence reached
+
+### Assignment 3 (CNN Image Classification)
+
+**Q27: Why use Conv2D instead of Dense for images?**
+A:
+- Dense: Loses spatial information, too many parameters
+- Conv2D: Preserves 2D structure, shares parameters, learns local features
+- Example: 224×224×3 → Dense needs 50M params, CNN only 576
+
+**Q28: Explain pooling operation in detail.**
+A: Max pooling:
+1. Divide feature map into 2×2 regions
+2. Take maximum value
+3. Stride 2: Move by 2 pixels each time
+4. Effect: Reduce size to 1/4, preserve important features
+
+Example: 16×16 feature map → 8×8 after 2×2 pooling
+
+**Q29: What is the purpose of ReLU activation in hidden layers?**
+A:
+- Non-linearity: Allows learning complex functions
+- Computational efficiency: Simple max(0, x)
+- Solves vanishing gradient: Gradient = 1 for positive values
+- Empirically works very well
+
+**Q30: Describe the feature learning hierarchy in CNN.**
+A:
+- Layer 1: Low-level features (edges, corners, colors)
+- Layer 2: Mid-level features (textures, shapes, combinations of edges)
+- Layer 3: High-level features (object parts, wheels, eyes)
+- Later layers: Complex objects (cars, faces)
+
+This hierarchy emerges automatically during training.
+
+**Q31: Why use Softmax at output for multi-class classification?**
+A:
+- Converts raw output values to probability distribution
+- Output: 10 values (0-1), sum to 1
+- Interpretable: Confidence of each class
+- Suitable for categorical crossentropy loss
+
+**Q32: What does "padding='same'" mean in Conv2D?**
+A: Zero-pad edges of input to maintain spatial dimensions after convolution.
+
+Without padding: 28×28 with 3×3 filter → 26×26 (loses edges)
+With padding: 28×28 stays 28×28
+
+Important: Preserve information at edges
+
+### Assignment 4 (Autoencoder Anomaly Detection)
+
+**Q33: Why train autoencoder on normal data only?**
+A: Autoencoder learns to reconstruct what it sees.
+
+- Train on normal: Learns to reconstruct normal data
+- Test on anomaly: High reconstruction error (wasn't trained on it)
+- This error signals "unusual/anomalous"
+
+If trained on mixed data: Can't detect anomalies (learns to reconstruct them too).
+
+**Q34: How do you set the threshold for anomaly detection?**
+A:
+1. Get reconstruction errors on training (normal) data
+2. threshold = mean(errors) + std(errors)
+3. Test sample: If error > threshold → Anomaly
+
+Rationale: Assumes errors normally distributed. Threshold at ~2 std dev catches outliers.
+
+**Q35: What is latent representation? Why compress?**
+A: Latent representation: Compressed, lower-dimensional representation in bottleneck.
+
+Example: Input 784-dims → Latent 32-dims → Output 784-dims
+
+Why compress:
+- Forces learning of essential features
+- Removes noise
+- Efficient representation
+- Acts as regularization
+
+### Assignment 5 (CBOW)
+
+**Q36: What does CBOW predict?**
+A: CBOW (Continuous Bag of Words) predicts center word from surrounding context.
+
+Example:
+- Sentence: "The quick brown fox"
+- Window size 2: Given [quick, brown] → Predict "fox"
+
+Input: Context words → Network → Output: Probability of center word
+
+**Q37: How are word embeddings learned in CBOW?**
+A:
+1. Initialize random embeddings for each word
+2. For each training example: Context words → Network → Predict center word
+3. Loss: Cross-entropy between predicted and actual
+4. Backward: Update word embeddings
+5. After training: Similar words have similar embeddings
+
+Example: Embeddings of "king", "queen", "prince" are close
+
+**Q38: What is the difference between CBOW and Skip-gram?**
+A:
+- CBOW: Context → Center word (many-to-one)
+- Skip-gram: Center word → Context words (one-to-many)
+
+CBOW: Faster training, better for frequent words
+Skip-gram: Better quality embeddings, slower training
+
+### Assignment 6 (Transfer Learning VGG16)
+
+**Q39: Why freeze lower convolutional layers?**
+A:
+- Lower layers learn general features (edges, textures)
+- These features useful for any image task
+- Freezing saves computation
+- Prevents overfitting on small target dataset
+
+Upper layers adapted to new task (custom classifier).
+
+**Q40: What does "fine-tuning" mean?**
+A:
+1. First: Freeze all layers, train only classifier
+2. Then: Unfreeze some upper layers, train all with low learning rate
+
+Why:
+- Initial: Learn task on top of frozen features
+- Fine-tune: Adapt pre-trained features to specific task
+- Low learning rate: Don't destroy learned features
+
+**Q41: Compare train from scratch vs transfer learning.**
+A:
+
+| Aspect | Train from Scratch | Transfer Learning |
+|--------|-------------------|-------------------|
+| Data needed | Large | Small |
+| Time | Weeks/months | Hours/days |
+| Accuracy | Good | Excellent |
+| Computation | High | Low |
+| When to use | Large dataset | Small dataset, similar domain |
+
+Transfer learning almost always better with small data.
+
+---
+
+## MODIFICATION/VARIATION QUESTIONS
+
+**Q42: How would you modify MNIST code for CIFAR-10?**
+A: Changes:
+- Input shape: (28, 28, 1) → (32, 32, 3)
+- Use Conv2D (CNN) instead of Dense
+- 10 classes still (but different: objects vs digits)
+- Preprocessing: Normalize similar, but RGB not grayscale
+- Model architecture: More layers needed for color images
+
+**Q43: What if dropout rate is too high (e.g., 0.9)?**
+A: Too much dropout:
+- Network disabled too much (can't learn)
+- Underfitting (high training and validation loss)
+- Solution: Use smaller dropout (0.2-0.5)
+
+What if too low (0.01)?
+- Overfitting (no regularization effect)
+- Solution: Increase dropout rate
+
+**Q44: How to handle class imbalance (e.g., 90% class A, 10% class B)?**
+A: Solutions:
+- Class weights: Penalize mistakes on minority class more
+- Resampling: Over-sample minority, under-sample majority
+- Different metrics: Use F1-score, recall instead of accuracy
+- Data augmentation: Create synthetic minority samples
+
+**Q45: What if model converges too quickly and plateaus?**
+A: Model stopped learning (local minimum):
+- Increase learning rate: Escape plateau
+- Add more layers: Larger capacity needed
+- Add regularization: Might be noise (dropout, L2)
+- Different optimizer: Try Adam instead of SGD
+
+**Q46: How to modify autoencoder for denoising?**
+A: Current: Input image → Output image
+
+Denoising:
+1. Take clean image
+2. Add random noise
+3. Train: Input (noisy) → Output (clean)
+4. Network learns to denoise
+
+Useful for image enhancement, missing data imputation.
+
+**Q47: How to extend CBOW for other languages?**
+A: Steps:
+- Change text data (use language corpus)
+- Tokenization: May need language-specific tokenizer
+- Embedding dimension: Same approach
+- Training: Same network
+- Evaluation: Semantic similarity still works
+
+CBOW language-agnostic (works for any language).
+
+---
+
+## PRACTICAL/APPLICATION QUESTIONS
+
+**Q48: Design a system to classify medical images (X-rays).**
+A:
+1. Dataset: Collect X-ray images, label by condition
+2. Preprocessing: Resize (e.g., 224×224), normalize pixel values
+3. Model: Pre-trained VGG16 or ResNet (transfer learning)
+4. Train: Adam optimizer, cross-entropy loss, batch size 32
+5. Validation: Hold-out 20% for validation during training
+6. Evaluation: Accuracy, sensitivity (catch diseases), specificity (avoid false alarms)
+7. Deployment: API service, return probability of disease
+
+Critical: Medical model must be very accurate (patient safety).
+
+**Q49: How would you build recommendation system using neural networks?**
+A:
+1. Embeddings: Learn user and item embeddings
+2. Interaction: Concatenate user + item embeddings
+3. Network: Dense layers to predict rating
+4. Loss: MSE (regression) or cross-entropy (classification)
+5. Training: Pairs (user, item, rating)
+6. Inference: For unseen (user, item), predict rating
+7. Recommendation: Items with highest predicted ratings
+
+Could use autoencoders for dimensionality reduction.
+
+**Q50: Describe a real-world CNN deployment for object detection in retail.**
+A:
+1. Cameras in store
+2. CNN processes frames in real-time
+3. Detects products, their locations
+4. Tracks inventory (stock prediction)
+5. Alerts: Missing items, wrong placement
+6. Edge deployment: Run on retail hardware (not cloud)
+7. Privacy: Process locally, don't send images
+8. Latency: <100ms for real-time response
+
+Requires: Optimization (model compression, quantization)
+
+
+
+
+## THEORY QUESTIONS (UNIT-WISE)
+
+### Unit I: Fundamentals
+
+**Q1: Explain Backpropagation algorithm with mathematical formulas.**
+A: Backpropagation computes gradients using chain rule, going backwards through network:
+- Forward: Compute predictions layer by layer
+- Error: Calculate loss = difference from target
+- Backward: ∂L/∂W = ∂L/∂y × ∂y/∂z × ∂z/∂W
+- Update: W_new = W_old - learning_rate × gradient
+- Used for all weight updates
+
+**Q2: What is the vanishing gradient problem and how does ReLU solve it?**
+A: In deep networks, gradients become exponentially smaller as they backpropagate through sigmoid/tanh (0-0.25 gradient range). After multiplying through 10 layers: 0.25^10 ≈ 0.0000001. Weights stop updating.
+
+ReLU has gradient = 1 for positive values (no multiplication by small number), solving the problem.
+
+**Q3: Compare different activation functions. When would you use each?**
+A:
+- ReLU: Hidden layers (default, solves vanishing gradient)
+- Sigmoid: Binary classification output
+- Tanh: Hidden layers (older alternative to ReLU)
+- Softmax: Multi-class output
+- Leaky ReLU: When dead ReLU is problem
+- ELU: Better than ReLU in some cases
+
+**Q4: Explain dropout regularization. How does it prevent overfitting?**
+A: During training, randomly disable 50% neurons. Forces network to learn redundant representations. Each training iteration uses different sub-network. Prevents co-adaptation of neurons. During inference, use all neurons, scale by (1-dropout_rate).
+
+**Q5: What are hyperparameters? Give examples and how to tune them.**
+A: Parameters set before training (not learned from data):
+- Learning rate: Control convergence speed
+- Batch size: Affects gradient smoothness
+- Number of epochs: Training iterations
+- Layer size: Network capacity
+- Dropout rate: Regularization strength
+Tuning: Start with common values, try grid search or random search, monitor validation performance.
+
+**Q6: Explain L1 vs L2 regularization.**
+A:
+- L1: Loss += λ×Σ|W| → Sparse (some weights = 0)
+- L2: Loss += λ×Σ(W²) → Smooth (shrinks all weights)
+- L2 preferred (smooth regularization)
+- L1 for feature selection
+
+### Unit II: CNN
+
+**Q7: Explain convolution operation. What are benefits over feedforward?**
+A: Convolution: Slide filter across image, element-wise multiply, sum. Detects local features (edges, textures).
+
+Benefits:
+- Preserve spatial structure (2D structure not lost)
+- Parameter sharing (same filter multiple positions)
+- Translation invariance
+- Fewer parameters than fully connected
+
+**Q8: What is pooling? Why needed?**
+A: Max pooling takes maximum value in 2×2 window. Stride 2 halves dimensions.
+
+Why:
+- Reduce computational cost
+- Reduce parameters
+- Provide translation invariance
+- Preserve important features
+
+**Q9: Describe AlexNet architecture and its significance.**
+A: 8 layers (5 conv, 3 fc), 60M parameters. Won ImageNet 2012, sparked deep learning revolution.
+
+Innovations:
+- ReLU activation (solves vanishing gradient)
+- GPU training (CUDA, parallel computation)
+- Dropout regularization
+- Large dataset (ImageNet 1.2M images)
+
+**Q10: How does parameter sharing in CNN reduce parameters?**
+A: Same filter applied at all positions. Example:
+- Fully connected: 224×224×1000 = 50M parameters
+- CNN with 64 3×3 filters: 3×3×64 = 576 parameters
+
+Reduction factor: ~86,000×!
+
+### Unit III: RNN
+
+**Q11: Explain LSTM cell and how it solves vanishing gradient.**
+A: LSTM has 4 gates:
+1. Forget gate: Controls what to forget from previous state
+2. Input gate: Controls new information to add
+3. Cell state: C_t = f_t×C_{t-1} + i_t×C̃_t (preserved by addition, not multiplication)
+4. Output gate: Decides what to output
+
+Solves vanishing gradient: Gradient flows through addition (C_t), not multiplication. So gradient doesn't vanish.
+
+**Q12: Compare Encoder-Decoder vs standard RNN.**
+A:
+- Standard RNN: Sequence to output (many-to-one)
+- Encoder-Decoder: Sequence to sequence (many-to-many, variable length)
+
+Encoder: Compress entire input sequence to context vector
+Decoder: Generate output sequence from context vector
+Used for: Machine translation, chatbots, image captioning
+
+**Q13: What are vanishing gradient and exploding gradient problems in RNN?**
+A:
+- Vanishing: Gradients become tiny, can't learn long-term dependencies
+- Exploding: Gradients become huge, weights update wildly
+- Solutions: LSTM, gradient clipping, careful weight initialization
+
+### Unit IV: Autoencoders
+
+**Q14: Explain autoencoder architecture and how it learns.**
+A:
+- Encoder: Compresses input to bottleneck (lower dimension)
+- Decoder: Reconstructs input from compressed representation
+- Loss: Reconstruction error (||Input - Output||²)
+- Learns: Useful features by reconstruction task (unsupervised)
+
+**Q15: How does anomaly detection using autoencoders work?**
+A:
+1. Train on normal data only
+2. Autoencoder learns to reconstruct normal data
+3. For test sample: Calculate reconstruction error
+4. High error → Anomaly (unexpected, wasn't in training)
+5. Set threshold = mean + std of training errors
+6. if error > threshold: Flag as anomaly
+
+**Q16: Difference between undercomplete and regularized autoencoders.**
+A:
+- Undercomplete: Bottleneck smaller than input (forced compression)
+- Regularized: Add regularization terms to loss:
+  - Sparse: Penalize too many active neurons
+  - Denoising: Add noise, learn to remove it
+  - Contractive: Penalize sensitivity to input changes
+
+### Unit V: Representation Learning
+
+**Q17: Explain transfer learning. Why does it work?**
+A: Train on large source dataset (ImageNet), transfer to small target dataset.
+
+Why works:
+- Early layers learn general features (edges, textures, shapes)
+- These features useful for many tasks
+- Don't need to learn from scratch
+- Saves time and data
+
+Process:
+1. Load pre-trained model
+2. Freeze early layers
+3. Train only final layers on target data
+4. Optionally fine-tune some layers
+
+**Q18: What is domain adaptation?**
+A: Source and target distributions different. Adapt features to minimize difference.
+
+Example: Synthetic images → Real photos
+Methods: Fine-tuning, adversarial training, feature alignment
+
+### Unit VI: Applications
+
+**Q19: How would you build a chatbot using RNN/LSTM?**
+A:
+- Encoder: LSTM encodes user question
+- Decoder: LSTM generates response
+- Attention: Focus on relevant parts of question
+- Many-to-many architecture
+
+**Q20: Explain image classification application end-to-end.**
+A:
+1. Collect and label image dataset
+2. Preprocess: Resize, normalize
+3. Split: Train/val/test
+4. Build CNN model
+5. Train: Forward, backward, update
+6. Evaluate: Accuracy, precision, recall
+7. Deploy: Use for predictions
